@@ -198,73 +198,99 @@ void wnd_pos_event(ui_window_t *window, void *arg, pos_event_t *event) {
 void handle_keypress(sveska_t *sveska, const kbd_event_t *event) {
     if (!sveska || !event || !sveska->document.spans) return;
 
-    // Handle Serbian Latin layout
- //   if (sveska->current_layout == KEYBOARD_LAYOUT_SERBIAN_LATIN) {
-        char ch = translate_key_to_char(event);
-        if (!ch) return;
+    // KORAK 1: Uzimamo čist Unicode karakter iz sistema
+    char32_t unicode_char = event->c;
+    if (unicode_char == 0) return;
 
-        if (has_selection(sveska)) {
-            int start = MIN(sveska->selection.start_pos, sveska->selection.end_pos);
-            int end = MAX(sveska->selection.start_pos, sveska->selection.end_pos);
-            int selected_char = end - start;
-        
-            if (selected_char > 1) {
-                delete_selected_text(sveska);
-                sveska->cursor_index = start;
-            } else {
-                sveska->cursor_index = end; 
-            }
+    // KORAK 2: Konvertujemo char32_t u UTF-8 niz na licu mesta
+    char utf8_bytes[5] = {0}; // Maksimalno 4 bajta za UTF-8 + null terminator
+    size_t utf8_len = 0;
+
+    if (unicode_char < 0x80) {
+        utf8_bytes[0] = (char)unicode_char;
+        utf8_len = 1;
+    } else if (unicode_char < 0x800) {
+        utf8_bytes[0] = (char)(0xC0 | (unicode_char >> 6));
+        utf8_bytes[1] = (char)(0x80 | (unicode_char & 0x3F));
+        utf8_len = 2;
+    } else if (unicode_char < 0x10000) {
+        utf8_bytes[0] = (char)(0xE0 | (unicode_char >> 12));
+        utf8_bytes[1] = (char)(0x80 | ((unicode_char >> 6) & 0x3F));
+        utf8_bytes[2] = (char)(0x80 | (unicode_char & 0x3F));
+        utf8_len = 3;
+    } else {
+        utf8_bytes[0] = (char)(0xF0 | (unicode_char >> 18));
+        utf8_bytes[1] = (char)(0x80 | ((unicode_char >> 12) & 0x3F));
+        utf8_bytes[2] = (char)(0x80 | ((unicode_char >> 6) & 0x3F));
+        utf8_bytes[3] = (char)(0x80 | (unicode_char & 0x3F));
+        utf8_len = 4;
+    }
+
+    // Rukovanje selekcijom teksta (Ovo ostaje tvoje)
+    if (has_selection(sveska)) {
+        int start = MIN(sveska->selection.start_pos, sveska->selection.end_pos);
+        int end = MAX(sveska->selection.start_pos, sveska->selection.end_pos);
+        int selected_char = end - start;
+    
+        if (selected_char > 1) {
+            delete_selected_text(sveska);
+            sveska->cursor_index = start;
+        } else {
+            sveska->cursor_index = end; 
         }
+    }
 
-        size_t span_idx, pos_in_span;
-        get_span_and_pos(sveska, sveska->cursor_index, &span_idx, &pos_in_span);
-
-
-        // Check if we need a new span due to font/style mismatch
-text_span_t *span = &sveska->document.spans[span_idx];
-if (span->font != sveska->font || 
-    span->font_size != sveska->font_size ||
-    span->bold != sveska->bold || 
-    span->italic != sveska->italic || 
-    span->underline != sveska->underline) {
-    if (!create_new_span(sveska)) return;
-    // Update span_idx and pos_in_span after creating new span
+    size_t span_idx, pos_in_span;
     get_span_and_pos(sveska, sveska->cursor_index, &span_idx, &pos_in_span);
-    span = &sveska->document.spans[span_idx];
-}
 
-        // Ensure span has capacity
-        if (span->length >= span->capacity - 1) {
-            size_t new_capacity = span->capacity * 2;
-            char *new_text = realloc(span->text, new_capacity);
-            if (!new_text) return;
-            span->text = new_text;
-            span->capacity = new_capacity;
-        }
+    // Provera fonta/stila (Ovo ostaje tvoje)
+    text_span_t *span = &sveska->document.spans[span_idx];
+    if (span->font != sveska->font || 
+        span->font_size != sveska->font_size ||
+        span->bold != sveska->bold || 
+        span->italic != sveska->italic || 
+        span->underline != sveska->underline) {
+        if (!create_new_span(sveska)) return;
+        get_span_and_pos(sveska, sveska->cursor_index, &span_idx, &pos_in_span);
+        span = &sveska->document.spans[span_idx];
+    }
 
-        // Record undo operation before modifying the text
-        char char_str[2] = {ch, '\0'};
-        edit_operation_t op = {
-            .type = OP_INSERT,
-            .data.text.text = str_ndup(char_str, 1),
-            .data.text.position = sveska->cursor_index,
-            .data.text.length = 1,
-            .affected_span = span_idx,
-            .timestamp = get_timestamp()
-        };
-        
-        record_edit(sveska, op);
+    // KORAK 3: Osiguravamo kapacitet spana za novu dužinu bajtova (utf8_len)
+    if (span->length + utf8_len >= span->capacity - 1) {
+        size_t new_capacity = (span->capacity + utf8_len) * 2;
+        char *new_text = realloc(span->text, new_capacity);
+        if (!new_text) return;
+        span->text = new_text;
+        span->capacity = new_capacity;
+    }
 
-        // Make space for new character and insert it
-        memmove(&span->text[pos_in_span + 1], &span->text[pos_in_span], 
-               span->length - pos_in_span);
-        span->text[pos_in_span] = ch;
-        span->length++;
-        span->text[span->length] = '\0';
-    // After inserting character
-    sveska->cursor_index++;
+    // KORAK 4: Beleženje Undo operacije sa punim UTF-8 stringom
+    edit_operation_t op = {
+        .type = OP_INSERT,
+        .data.text.text = str_ndup(utf8_bytes, utf8_len),
+        .data.text.position = sveska->cursor_index,
+        .data.text.length = utf8_len, // Beležimo dužinu unetih bajtova
+        .affected_span = span_idx,
+        .timestamp = get_timestamp()
+    };
+    record_edit(sveska, op);
+
+    // KORAK 5: Pravimo prostor za broj UTF-8 bajtova i kopiramo ih u span
+    memmove(&span->text[pos_in_span + utf8_len], &span->text[pos_in_span], 
+           span->length - pos_in_span);
+    
+    for (size_t i = 0; i < utf8_len; i++) {
+        span->text[pos_in_span + i] = utf8_bytes[i];
+    }
+    
+    span->length += utf8_len;
+    span->text[span->length] = '\0';
+
+    // Pomera kursor napred i osvežava prikaz
+    sveska->cursor_index += utf8_len; // Kursor pomeramo za broj bajtova
     sveska_text_render(sveska);
 }
+
 
 
 static ui_window_cb_t window_cb = {
