@@ -87,16 +87,6 @@ static void menu_action_text_color_yellow(ui_menu_entry_t *entry, void *arg);
 static void menu_action_text_color_orange(ui_menu_entry_t *entry, void *arg);
 static void menu_action_text_color_brown(ui_menu_entry_t *entry, void *arg);
 
-static void menu_action_shape_handwrite(ui_menu_entry_t *entry, void *arg);
-static void menu_action_shape_line(ui_menu_entry_t *entry, void *arg);
-static void menu_action_shape_circle(ui_menu_entry_t *entry, void *arg);
-static void menu_action_shape_rectangle(ui_menu_entry_t *entry, void *arg);
-static void menu_action_shape_circle_filled(ui_menu_entry_t *entry, void *arg);
-static void menu_action_shape_rectangle_filled(ui_menu_entry_t *entry, void *arg);
-
-static void menu_action_us_keyboard_layout(ui_menu_entry_t *entry, void *arg);
-static void menu_action_sr_cir_keyboard_layout(ui_menu_entry_t *entry, void *arg);
-static void menu_action_sr_lat_keyboard_layout(ui_menu_entry_t *entry, void *arg);
 
 static void menu_action_help(ui_menu_entry_t *entry, void *arg);
 
@@ -123,8 +113,7 @@ errno_t create_menu_bar(sveska_t *sveska) {
     ui_menu_t *size_menu;
     ui_menu_t *color_menu;   // For Color menu
     ui_menu_t *color_text_menu;   // For Color menu
-    ui_menu_t *shape_menu;   // For Shape menu
-    ui_menu_t *keyboard_menu;   // For Shape menu
+
     ui_menu_t *help_menu;    // For Help menu
 
     ui_menu_entry_t *file_new_entry = NULL;
@@ -173,16 +162,6 @@ errno_t create_menu_bar(sveska_t *sveska) {
     ui_menu_entry_t *color_orange_entry = NULL;   // Orange color entry
     ui_menu_entry_t *color_brown_entry = NULL;    // Brown color entry
 
-    ui_menu_entry_t *shape_handwrite_entry = NULL;
-    ui_menu_entry_t *shape_line_entry = NULL;
-    ui_menu_entry_t *shape_circle_entry = NULL;
-    ui_menu_entry_t *shape_circle_filled_entry = NULL;
-    ui_menu_entry_t *shape_rectangle_entry = NULL;
-    ui_menu_entry_t *shape_rectangle_filled_entry = NULL;
-
-    ui_menu_entry_t *us_keyboard_layout = NULL;
-    ui_menu_entry_t *sr_cir_keyboard_layout = NULL;
-    ui_menu_entry_t *sr_lat_keyboard_layout = NULL;
 
     ui_menu_entry_t *help_entry = NULL;  // Help menu entry
 
@@ -311,7 +290,7 @@ errno_t create_menu_bar(sveska_t *sveska) {
         return rc;
     }
     
-    printf("Total fonts read from list: %zu\n", sveska->font_count);
+  //  printf("Total fonts read from list: %zu\n", sveska->font_count);
     
     for (size_t i = 0; i < sveska->font_count; i++) {
         ui_menu_entry_t *entry;
@@ -354,7 +333,7 @@ errno_t create_menu_bar(sveska_t *sveska) {
     /* Create Size menu **************************************************/
     rc = ui_menu_dd_create(sveska->menubar, "~V~elicina", NULL, &size_menu);
     if (rc != EOK) {
-        printf("Greska pri kreiranju Size menu.\n");
+        printf("Greska pri kreiranju Menija velicine.\n");
         return rc;
     }
 
@@ -568,98 +547,6 @@ errno_t create_menu_bar(sveska_t *sveska) {
     ui_menu_entry_set_cb(color_brown_entry, menu_action_color_brown, sveska);
 
 
-
-
-
-
-
-
-
-    /* Create Shape menu *******************************************/
-    rc = ui_menu_dd_create(sveska->menubar, "~O~blik", NULL, &shape_menu);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Shape menu.\n");
-        return rc;
-    }
-
-    rc = ui_menu_entry_create(shape_menu, "Slobodno", "Ctrl+H", &shape_handwrite_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Handwrite shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_handwrite_entry, menu_action_shape_handwrite, sveska);
-
-    rc = ui_menu_entry_create(shape_menu, "Linija", "Ctrl+L", &shape_line_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Line shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_line_entry, menu_action_shape_line, sveska);
-
-    rc = ui_menu_entry_create(shape_menu, "Krug", "Ctrl+C", &shape_circle_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Circle shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_circle_entry, menu_action_shape_circle, sveska);
-
-    rc = ui_menu_entry_create(shape_menu, "Pun Krug", "Ctrl+D", &shape_circle_filled_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Filled Circle shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_circle_filled_entry, menu_action_shape_circle_filled, sveska);
-
-
-    rc = ui_menu_entry_create(shape_menu, "Pun Cetvorougao", "Ctrl+F", &shape_rectangle_filled_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju FILLED Rectangle shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_rectangle_filled_entry, menu_action_shape_rectangle_filled, sveska);
-
-    rc = ui_menu_entry_create(shape_menu, "Cetvorougao", "Ctrl+R", &shape_rectangle_entry);
-    if (rc != EOK) {
-        printf("Greska pri kreiranju Rectangle shape menu entry.\n");
-        return rc;
-    }
-    ui_menu_entry_set_cb(shape_rectangle_entry, menu_action_shape_rectangle, sveska);
-
-/*              tastatura izbor  *****************************/
-
-rc = ui_menu_dd_create(sveska->menubar, "~T~astatura", NULL, &keyboard_menu);
-if (rc != EOK) {
-    printf("Greska pri kreiranju Shape menu.\n");
-    return rc;
-}
-
-
-rc = ui_menu_entry_create(keyboard_menu, "USA Tastatura", "Ctrl+R", &us_keyboard_layout);
-if (rc != EOK) {
-    printf("Greska pri kreiranju us_keyboard_layout.\n");
-    return rc;
-}
-ui_menu_entry_set_cb(us_keyboard_layout, menu_action_us_keyboard_layout, sveska);
-
-
-
-rc = ui_menu_entry_create(keyboard_menu, "Ci Tastatura", "Ctrl+R", &sr_cir_keyboard_layout);
-if (rc != EOK) {
-    printf("Greska pri kreiranju sr_cir_keyboard_layout.\n");
-    return rc;
-}
-ui_menu_entry_set_cb(sr_cir_keyboard_layout, menu_action_sr_cir_keyboard_layout, sveska);
-
-
-rc = ui_menu_entry_create(keyboard_menu, "Lat Tastatura", "Ctrl+R", &sr_lat_keyboard_layout);
-if (rc != EOK) {
-    printf("Greska pri kreiranju sr_lat_keyboard_layout.\n");
-    return rc;
-}
-ui_menu_entry_set_cb(sr_lat_keyboard_layout, menu_action_sr_lat_keyboard_layout, sveska);
-
-
-
     /* Create Help menu */
     rc = ui_menu_dd_create(sveska->menubar, "~P~omoc", NULL, &help_menu);
     if (rc != EOK) {
@@ -698,16 +585,7 @@ void menu_action_open(ui_menu_entry_t *entry, void *arg) {
     printf("krece otvaranje dijaloga.\n");
     file_open();
     printf("zavrsio otvaranje dijaloga.\n");
-  /*
-    const char *path = "novi_text.zmj";
-    
-    if (load_document(sveska, path)) {
-        printf("Document loaded successfully\n");
-    } else {
-        // Show error message
-        printf("Ne mogu da ucitam dokument\n");
-    }
-        */
+
         return;
 }
 
@@ -965,30 +843,6 @@ void menu_action_color_brown(ui_menu_entry_t *entry, void *arg) {
 
 }
 
-// Shape callbacks for menu entries
-void menu_action_shape_handwrite(ui_menu_entry_t *entry, void *arg) {
-
-}
-
-void menu_action_shape_line(ui_menu_entry_t *entry, void *arg) {
-}
-
-void menu_action_shape_circle(ui_menu_entry_t *entry, void *arg) {
-
-}
-
-void menu_action_shape_circle_filled(ui_menu_entry_t *entry, void *arg) {
-
-}
-
-void menu_action_shape_rectangle(ui_menu_entry_t *entry, void *arg) {
-
-
-}
-void menu_action_shape_rectangle_filled(ui_menu_entry_t *entry, void *arg) {
-
-}
-/***************************************************************** */
 
 /************  TEXT COLOR  ******************** */
 // Color callbacks for menu entries
@@ -1040,40 +894,6 @@ void menu_action_text_color_brown(ui_menu_entry_t *entry, void *arg) {
 
 }
 
-/*
-    ui_menu_entry_t *us_keyboard_layout = NULL;
-    ui_menu_entry_t *sr_cir_keyboard_layout = NULL;
-    ui_menu_entry_t *sr_lat_keyboard_layout = NULL;
-
-*/
-
-/*   TASTATURAAA *************/
-void menu_action_us_keyboard_layout(ui_menu_entry_t *entry, void *arg) {
-    sveska_t *sveska = (sveska_t *)arg;
-    sveska->current_layout = KEYBOARD_LAYOUT_US;
-    printf("Keyboard layout set to US\n");
-    // Optional: Update status bar or other UI feedback
-}
-
-void menu_action_sr_cir_keyboard_layout(ui_menu_entry_t *entry, void *arg) {
-    sveska_t *sveska = (sveska_t *)arg;
-    sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_CYRILLIC;
-    printf("Keyboard layout set to Serbian Cyrillic\n");
-    // Optional: Update status bar or other UI feedback
-
-}
-
-void menu_action_sr_lat_keyboard_layout(ui_menu_entry_t *entry, void *arg) {
-    sveska_t *sveska = (sveska_t *)arg;
-    sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_LATIN;
-    printf("Keyboard layout set to Serbian Latin\n");
-    // Optional: Update status bar or other UI feedback
-
-}
-
-
-
-
 
 void menu_action_help(ui_menu_entry_t *entry, void *arg)
 {    
@@ -1081,19 +901,17 @@ void menu_action_help(ui_menu_entry_t *entry, void *arg)
 }
 
 
-
-
 void update_font_size(sveska_t *sveska, float new_font_size) {
     // Step 1: Update the font size in the sveska structure
     sveska->font_size = new_font_size;
-    printf("Velicina fonta promenjena na %.1f\n", new_font_size);
+ //   printf("Velicina fonta promenjena na %.1f\n", new_font_size);
 
     // Step 2: If text is selected, change the font size in the selected range of spans
     if (sveska->selection.is_selecting) {
         size_t start = sveska->selection.start_pos;
         size_t end = sveska->selection.end_pos;
 
-        printf("Menjam velicinu fonta za selektovan text (start: %zu, end: %zu)\n", start, end);
+      //  printf("Menjam velicinu fonta za selektovan text (start: %zu, end: %zu)\n", start, end);
 
         // Iterate over the selected range of spans and update the font size
         for (size_t i = start; i < end; ++i) {
@@ -1133,7 +951,7 @@ void update_font_size(sveska_t *sveska, float new_font_size) {
         // Increment the document span count
         sveska->document.count++;
 
-        printf("Novi span kreiran sa vrlicinom fonta %.1f\n", sveska->font_size);
+       // printf("Novi span kreiran sa vrlicinom fonta %.1f\n", sveska->font_size);
     }
 
     // Step 4: Update the font size in the font struct, so future text uses it
@@ -1149,57 +967,84 @@ void update_font_size(sveska_t *sveska, float new_font_size) {
 /** Open Open File dialog. */
 static void file_open(void)
 {
-	ui_file_dialog_params_t fdparams;
+	// Since current_file is an array, check if the first character is not null
+ //   sveska_t *file_name = (sveska_t *) arg;
+    ui_file_dialog_params_t fdparams;
 	ui_file_dialog_t *dialog;
 	errno_t rc;
 
 	ui_file_dialog_params_init(&fdparams);
 	fdparams.caption = "Open File";
-//	fdparams.ifname = old_fname;
+
 
 	rc = ui_file_dialog_create(sveska->ui, &fdparams, &dialog);
 	if (rc != EOK) {
-		printf("Greska pri kreiranju message dialog.\n");
+		printf("Ne mogu da kreiram dijalog poruka.\n");
 		return;
 	}
 
 	ui_file_dialog_set_cb(dialog, &open_dialog_cb, sveska);
 }
 
-
-
-static void open_dialog_bok(ui_file_dialog_t *dialog, void *arg, const char *fname)
+/** Open File dialog OK button press.
+ *
+ * @param dialog Open File dialog
+ * @param arg Argument (sveska_t *)
+ * @param fname File name
+ */
+/** Open File dialog OK button press.
+ *
+ * @param dialog Open File dialog
+ * @param arg Argument (sveska_t *)
+ * @param fname File name
+ */
+static void open_dialog_bok(ui_file_dialog_t *dialog, void *arg,
+    const char *fname)
 {
-    sveska_t *sveska = (sveska_t *)arg;
-    char *cname = str_dup(fname);  // Normalize and format the path
-    
-    if (cname == NULL) {
-        printf("Van memorije.\n");
-        ui_file_dialog_destroy(dialog);
-        return;
-    }
+	sveska_t *sveska = (sveska_t *)arg;
+	char *cname;
 
-    const char *ext = daj_extenziju(cname);  // Use normalized path for extension check
+	if (fname == NULL || *fname == '\0') {
+		//printf("Greska: fname sa steka je prazan.\n");
+		ui_file_dialog_destroy(dialog);
+		return;
+	}
 
-    // Handle different file types
-    if (str_casecmp(ext, ".txt") == 0) {
-        printf("This is a TXT file: %s\n", cname);
-        open_txt_file(sveska, cname);  // Use normalized path
-    } 
-    else if (str_casecmp(ext, ".zmj") == 0) {
-        printf("This is a ZMJ file: %s\n", cname);
-        load_document(sveska, cname);  // Use normalized path
-    }
-    else {
-        printf("Unsupported file type: %s\n", ext);
-    }
+	// SPAS: Prvo kopiramo string dok je dijalog jos uvek ZIV u memoriji!
+	cname = str_dup(fname);
+	if (cname == NULL) {
+		printf("Van memorije.\n");
+		ui_file_dialog_destroy(dialog);
+		return;
+	}
 
-    // Free the normalized path
-    free(cname);
-    ui_file_dialog_destroy(dialog);
-    // Refresh display
-    gfx_update(ui_window_get_gc(sveska->window));
+	// Tek sada, kada imamo nasu bezbednu kopiju, mozemo unistiti prozor dijaloga
+	ui_file_dialog_destroy(dialog);
+
+	// Čistimo skrivene prelome redova sa kraja nase kopije putanje
+	size_t len = str_length(cname);
+	while (len > 0 && (cname[len - 1] == '\n' || cname[len - 1] == '\r' || cname[len - 1] == ' ')) {
+		cname[len - 1] = '\0';
+		len--;
+	}
+
+	// Pozivamo Lapis loader sa stabilnom putanjom
+	bool uspeh = load_document(sveska, cname);
+	if (!uspeh) {
+		free(cname);
+		return;
+	}
+
+	// Kopiramo sadrzaj u fiksni niz strukture
+	str_ncpy(sveska->current_file, MAX_PATH_LENGTH, cname, str_size(cname));
+	free(cname);
+
+	// Redosled osvežavanja za Lapis podsistem nakon uspešnog učitavanja
+	rebuild_display_text(sveska);
+	update_cursor_position(sveska);
+	sveska_text_render(sveska);
 }
+
 
 
 static void open_dialog_bcancel(ui_file_dialog_t *dialog, void *arg)
