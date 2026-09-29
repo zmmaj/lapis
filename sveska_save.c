@@ -10,7 +10,7 @@
  #include <errno.h>
 
 
-bool save_document(sveska_t *sveska, const char *path) {
+ bool save_document(sveska_t *sveska, const char *path) {
     if (!sveska || !path) return false;
     
     FILE *f = fopen(path, "w");
@@ -31,10 +31,18 @@ bool save_document(sveska_t *sveska, const char *path) {
         
         // Save text with newline handling
         fprintf(f, "TEXT_LEN=%zu\n", span->length);
-        if (span->length > 0) {
+        if (span->length > 0 && span->text) {
             fwrite(span->text, 1, span->length, f);
         }
         fputc('\n', f);  // End of text marker
+        
+        // =========================================================================
+        // DODATO: Upisivanje svojstava slike u fajl
+        // =========================================================================
+        fprintf(f, "IS_IMAGE=%d\n", span->is_image);
+        fprintf(f, "IMG_WIDTH=%d\n", span->img_width);
+        fprintf(f, "IMG_HEIGHT=%d\n", span->img_height);
+        // =========================================================================
         
         // Save other properties
         fprintf(f, "BOLD=%d\n", span->bold);
@@ -48,12 +56,13 @@ bool save_document(sveska_t *sveska, const char *path) {
     fclose(f);
     
     // Update current file and modification status
-    str_ncpy(sveska->current_file, MAX_PATH_LENGTH, path, str_size(path));
+    str_ncpy(sveska->current_file, MAX_PATH_LENGTH, path, MAX_PATH_LENGTH - 1);
     sveska->document_modified = false;
     
     printf("Dokument sacuvan u %s\n", path);
     return true;
 }
+
 
 bool load_document(sveska_t *sveska, const char *path) {
     if (!sveska || !path) return false;
@@ -91,7 +100,9 @@ bool load_document(sveska_t *sveska, const char *path) {
     if (sveska->document.spans) {
         for (size_t i = 0; i < sveska->document.count; i++) {
             text_span_t *span = &sveska->document.spans[i];
-            free(span->text);
+            if (span->text) {
+                free(span->text);
+            }
             if (span->font) {
                 sveska_font_unref(sveska, span->font);
             }
@@ -154,6 +165,19 @@ bool load_document(sveska_t *sveska, const char *path) {
                 // Read and discard the newline after the text
                 fgetc(f);
             }
+            // =========================================================================
+            // DODATO: Podrška za učitavanje slika i njihovih dimenzija unutar spana
+            // =========================================================================
+            else if (str_prefix(line, "IS_IMAGE=")) {
+                span->is_image = atoi(line + 9);
+            }
+            else if (str_prefix(line, "IMG_WIDTH=")) {
+                span->img_width = atoi(line + 10);
+            }
+            else if (str_prefix(line, "IMG_HEIGHT=")) {
+                span->img_height = atoi(line + 11);
+            }
+            // =========================================================================
             else if (str_prefix(line, "BOLD=")) {
                 span->bold = atoi(line + 5);
             }
@@ -181,9 +205,14 @@ bool load_document(sveska_t *sveska, const char *path) {
     for (size_t i = 0; i < span_count; i++) {
         text_span_t *span = &sveska->document.spans[i];
         
+        // POPRAVKA: Ako je u pitanju čista slika bez teksta, preskačemo font alokaciju
+        if (span->is_image && span->length == 0) {
+            span->font = NULL;
+            continue;
+        }
+        
         // Skip empty spans
         if (span->length == 0) {
-            // Use editor's default font for empty spans
             span->font = sveska_font_ref(sveska->font);
             span->font_size = sveska->font_size;
             str_ncpy(span->font_path, MAX_FONT_PATH_LEN, 
@@ -197,16 +226,11 @@ bool load_document(sveska_t *sveska, const char *path) {
         if (font) {
             span->font = font;
         } else {
-            // Fallback to Arial if font not found
-           // printf("Font not found: %s, falling back to Arial\n", span->font_path);
             font = sveska_font_load(sveska, "/fonts/arial.ttf", span->font_size);
-            
             if (font) {
                 span->font = font;
                 str_ncpy(span->font_path, MAX_FONT_PATH_LEN, "/fonts/arial.ttf", MAX_FONT_PATH_LEN - 1);
             } else {
-                // Ultimate fallback - use first available font
-             //   printf("Arial not found, using first available font\n");
                 if (sveska->font_count > 0) {
                     span->font = sveska_font_ref(&sveska->fonts[0]);
                     span->font_size = sveska->fonts[0].size;
@@ -217,24 +241,21 @@ bool load_document(sveska_t *sveska, const char *path) {
         }
     }
     
-    // Set editor's current font to first span's font
+    // Set editor's current font to first span's font (samo ako prvi span nije slika)
     if (span_count > 0) {
         text_span_t *first_span = &sveska->document.spans[0];
         if (first_span->font) {
-            // Update editor state
             sveska_font_t *old_font = sveska->font;
             sveska->font = sveska_font_ref(first_span->font);
             sveska->font_size = first_span->font_size;
             str_ncpy(sveska->current_font_path, MAX_FONT_PATH_LEN, 
                     first_span->font_path, MAX_FONT_PATH_LEN - 1);
             
-            // Release old font if different
             if (old_font && old_font != sveska->font) {
                 sveska_font_unref(sveska, old_font);
             }
         }
         
-        // Set current style to first span's style
         sveska->bold = first_span->bold;
         sveska->italic = first_span->italic;
         sveska->underline = first_span->underline;
@@ -258,6 +279,7 @@ bool load_document(sveska_t *sveska, const char *path) {
     printf("Dokument ucitan iz %s\n", path);
     return true;
 }
+
 
 
 
