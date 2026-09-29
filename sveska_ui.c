@@ -8,7 +8,7 @@
 
 
 #include "sveska.h"
-
+#include <stdio.h>
 #include <ui/ui.h>
 #include <ui/window.h>
 #include <ui/control.h>
@@ -24,7 +24,7 @@
 /* Rebuilds the display text from all spans */
 void rebuild_display_text(sveska_t *sveska) {
     if (!sveska || !sveska->document.spans || sveska->document.count == 0) {
-        printf("Nema spanova za rekonfiguraciju.\n");
+      //  printf("Nema spanova za rekonfiguraciju.\n");
         sveska->text_length = 0;
         if (sveska->text_buffer && sveska->text_capacity > 0) {
             sveska->text_buffer[0] = '\0';  // clear buffer safely
@@ -145,10 +145,32 @@ continue;
                     stbtt_ScaleForPixelHeight(&font->info, span->font_size) : 
                     font->scale;
         
-        for (size_t i = 0; i < span->length; i++) {
-            char c = span->text[i];
+        // --- POPRAVLJENA KOMPLETNA PETLJA ---
+        // Obrati pažnju: sklonili smo "i++" sa kraja ove linije jer se sada pomera dinamički!
+        for (size_t i = 0; i < span->length; ) {
             
-            if (c == '\n') {
+            // 1. Uzimamo ceo UTF-8 karakter (bajtove) umesto samo jednog bajta
+            utf8_char_t ch = sveska->get_utf8_char(span->text, i);
+            if (ch.length == 0) {
+                i++;
+                continue;
+            }
+
+            // 2. Dekodiramo bajtove u stvarni Unicode broj (codepoint)
+            int codepoint = 0;
+            if (ch.length == 1) {
+                codepoint = ch.bytes[0];
+            } else if (ch.length == 2) {
+                codepoint = ((ch.bytes[0] & 0x1F) << 6) | (ch.bytes[1] & 0x3F);
+            } else if (ch.length == 3) {
+                codepoint = ((ch.bytes[0] & 0x0F) << 12) | ((ch.bytes[1] & 0x3F) << 6) | (ch.bytes[2] & 0x3F);
+            } else if (ch.length == 4) {
+                codepoint = ((ch.bytes[0] & 0x07) << 18) | ((ch.bytes[1] & 0x3F) << 12) |
+                            ((ch.bytes[2] & 0x3F) << 6) | (ch.bytes[3] & 0x3F);
+            }
+            
+            // 3. Provera za novi red (sada koristi ispravan codepoint)
+            if (codepoint == '\n') {
                 // Store max height for current line
                 sveska->line_heights[current_line] = max_line_height;
                 
@@ -175,14 +197,29 @@ continue;
                 sveska->line_heights[current_line] = max_line_height;
                 sveska->line_count = current_line + 1;
                 x = sveska->margin_x;
+                
+                i += ch.length; // Pomeri indeks za dužinu novog reda
                 continue;
             }
             
             // Regular character
-            int codepoint = (unsigned char)c;
+            // Prvo pronalazimo stvarni indeks glifa u fontu
+            int glyph_index = stbtt_FindGlyphIndex(&font->info, codepoint);
+   // KONAČAN INŽENJERSKI BAJPAS ZA LATINIČNE KVAČICE:
+   if (glyph_index == 0) {
+    if (codepoint == 0x0161)      glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0448); // š -> malo ćirilično ш
+    else if (codepoint == 0x0160) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0418); // Š -> veliko ćirilično Ш
+    else if (codepoint == 0x017E) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0436); // ž -> malo ćirilično ж
+    else if (codepoint == 0x017D) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0416); // Ž -> veliko ćirilično Ж
+    else if (codepoint == 0x010D) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0447); // č -> malo ćirilično ч
+    else if (codepoint == 0x010C) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x0417); // Č -> veliko ćirilično Č
+    else if (codepoint == 0x0107) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x045B); // ć -> malo ćirilično ћ
+    else if (codepoint == 0x0106) glyph_index = stbtt_FindGlyphIndex(&font->info, 0x040B); // Ć -> veliko ćirilično Ћ
+}
+            // Računamo metriku karaktera pomoću GLYPH funkcija umesto CODEPOINT
             int advance, lsb, x0, y0, x1, y1;
-            stbtt_GetCodepointHMetrics(&font->info, codepoint, &advance, &lsb);
-            stbtt_GetCodepointBitmapBox(&font->info, codepoint, scale, scale, &x0, &y0, &x1, &y1);
+            stbtt_GetGlyphHMetrics(&font->info, glyph_index, &advance, &lsb);
+            stbtt_GetGlyphBitmapBox(&font->info, glyph_index, scale, scale, &x0, &y0, &x1, &y1);
             
             // Update max height for this line
             int char_height = (y1 - y0) + 4; // Add 4px padding
@@ -193,7 +230,11 @@ continue;
             
             // Advance position
             x += (int)(advance * scale) + sveska->char_spacing;
+            
+            // 4. KLJUČNI KORAK: Pomeramo petlju za stvarni broj bajtova koje je slovo zauzelo
+            i += ch.length;
         }
+
     }
     
     // Store max height for last line
