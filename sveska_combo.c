@@ -26,7 +26,7 @@ bool is_special_combo(const kbd_event_t *event) {
 
 void handle_copy(sveska_t *sveska) {
     if (!sveska || !has_selection(sveska)) {
-        printf("handle_copy: no selection\n");
+     //   printf("handle_copy: no selection\n");
         return;
     }
 
@@ -34,12 +34,12 @@ void handle_copy(sveska_t *sveska) {
     int end = MAX(sveska->selection.start_pos, sveska->selection.end_pos);
     size_t len = end - start;
 
-    printf("Copying selection from %d to %d (%zu chars)\n", start, end, len);
+   // printf("Copying selection from %d to %d (%zu chars)\n", start, end, len);
 
     // Allocate memory for text and styles
     clipboard_data_t *clip_data = calloc(1, sizeof(clipboard_data_t));
     if (!clip_data) {
-        printf("handle_copy: allocation failed for clip_data\n");
+      //  printf("handle_copy: allocation failed for clip_data\n");
         return;
     }
 
@@ -49,7 +49,7 @@ void handle_copy(sveska_t *sveska) {
     clip_data->underline = calloc(len, sizeof(bool));
 
     if (!clip_data->text || !clip_data->bold || !clip_data->italic || !clip_data->underline) {
-        printf("handle_copy: style allocation failed\n");
+       // printf("handle_copy: style allocation failed\n");
         clipboard_free_data(clip_data);
         return;
     }
@@ -59,13 +59,9 @@ void handle_copy(sveska_t *sveska) {
     get_span_and_pos(sveska, start, &first_span_idx, &dummy_pos);
     text_span_t *first_span = &sveska->document.spans[first_span_idx];
 
-// After getting first_span
-printf("First span font path: '%s'\n", first_span->font_path);
-printf("First span font size: %.1f\n", first_span->font_size);
-printf("Font pointer: %p\n", (void*)first_span->font);
 
 clip_data->font_size = first_span->font ? first_span->font_size : sveska->font_size;
-printf("Copying font SIZE: %s (%.1f)\n", clip_data->font_path, clip_data->font_size);
+//printf("Copying font SIZE: %s (%.1f)\n", clip_data->font_path, clip_data->font_size);
   
 // Get font info - with more robust fallbacks
     if (first_span->font) {
@@ -79,7 +75,7 @@ printf("Copying font SIZE: %s (%.1f)\n", clip_data->font_path, clip_data->font_s
         clip_data->font_size = sveska->font_size;
     }
 
-    printf("Copying font: %s (%.1f)\n", clip_data->font_path, clip_data->font_size);
+//    printf("Copying font: %s (%.1f)\n", clip_data->font_path, clip_data->font_size);
 
     // Copy text and styles
     for (int i = 0; i < (int)len; i++) {
@@ -105,12 +101,12 @@ printf("Copying font SIZE: %s (%.1f)\n", clip_data->font_path, clip_data->font_s
     char *serialized = serialize_styles(clip_data);
     if (serialized) {
         // Debug output before storing
-        printf("Serialized data (%zu bytes): %s\n", str_size(serialized), serialized);
+   //     printf("Serialized data (%zu bytes): %s\n", str_size(serialized), serialized);
         
         // Store to system clipboard
         errno_t rc = clipboard_put_str(serialized);
         if (rc != EOK) {
-            printf("Failed to store in clipboard: %d\n", rc);
+       //    printf("Failed to store in clipboard: %d\n", rc);
         }
         
         free(serialized);
@@ -128,7 +124,7 @@ void handle_paste(sveska_t *sveska) {
 
     clipboard_data_t *clip_data = clipboard_get_rich_text(sveska);
     if (!clip_data || !clip_data->text || clip_data->length == 0) {
-        printf("No valid data to paste\n");
+     //   printf("No valid data to paste\n");
         return;
     }
 
@@ -147,8 +143,8 @@ void handle_paste(sveska_t *sveska) {
 
     // Set font from clipboard data if available
     if (clip_data->font_path[0]) {
-        printf("Attempting to set paste font: %s (%.1f)\n", 
-               clip_data->font_path, clip_data->font_size);
+     //   printf("Attempting to set paste font: %s (%.1f)\n", 
+     //          clip_data->font_path, clip_data->font_size);
         
         // Find font in pre-loaded list
         bool font_found = false;
@@ -161,8 +157,8 @@ void handle_paste(sveska_t *sveska) {
         }
         
         if (!font_found) {
-            printf("Pasted font not found in pre-loaded list: %s\n", 
-                   clip_data->font_path);
+         //   printf("Pasted font not found in pre-loaded list: %s\n", 
+         //          clip_data->font_path);
             // Fall back to current font but keep the size
             sveska->font_size = clip_data->font_size;
         }
@@ -195,7 +191,7 @@ void handle_paste(sveska_t *sveska) {
             clip_data->underline[i] != clip_data->underline[i-1]) {
             
             if (!create_new_span(sveska)) {
-                printf("Failed to create new span for paste\n");
+             //   printf("Failed to create new span for paste\n");
                 break;
             }
         }
@@ -245,7 +241,7 @@ void handle_paste(sveska_t *sveska) {
 
 void handle_cut(sveska_t *sveska) {
     if (!sveska || !has_selection(sveska)) {
-        printf("No selection to cut\n");
+      //  printf("No selection to cut\n");
         return;
     }
 
@@ -257,7 +253,7 @@ void handle_cut(sveska_t *sveska) {
     // Create clipboard data structure
     clipboard_data_t *clip_data = malloc(sizeof(clipboard_data_t));
     if (!clip_data) {
-        printf("Cut buffer allocation failed\n");
+      //  printf("Cut buffer allocation failed\n");
         return;
     }
 
@@ -269,7 +265,7 @@ void handle_cut(sveska_t *sveska) {
     clip_data->length = len;
 
     if (!clip_data->text || !clip_data->bold || !clip_data->italic || !clip_data->underline) {
-        printf("Cut style buffers allocation failed\n");
+      //  printf("Cut style buffers allocation failed\n");
         clipboard_free_data(clip_data);
         return;
     }
@@ -427,6 +423,13 @@ void handle_special_combo(sveska_t *sveska, const kbd_event_t *event) {
 void handle_keyboard_event(sveska_t *sveska, const kbd_event_t *event) {
     if (!sveska || !event || event->type != KEY_PRESS) return;
 
+    // =========================================================================
+    // SIROVI DEBAG INPUT-A NA SAMOM ULAZU U LAPIS SUBSYSTEM
+    // =========================================================================
+ //   printf("\n[LAPIS] Sirova vrednost tastature -> c: %u | Hex: 0x%X | Fizički taster: %u\n", 
+  //      (unsigned int)event->c, (unsigned int)event->c, event->key);
+ // ===================================================================
+
     if (is_special_combo(event)) {
         handle_special_combo(sveska, event);
     } else {
@@ -504,11 +507,24 @@ void handle_regular_key(sveska_t *sveska, const kbd_event_t *event) {
             break;
         
         default: {
-            char ch = translate_key_to_char(event);
-            if (ch) {
-                insert_char_with_current_style(sveska, ch);
-            }
-            break;
+     /* 
+     * KONAČNO INŽENJERSKO REŠENJE: 
+     * Potpuno uklanjamo bilo kakav poziv za translate_key_to_char!
+     * Lapis više ne prevodi tastere, već uzima čist, gotov karakter 
+     * koji je sistem (input->layout) već savršeno preveo.
+     */
+    char32_t unicode_char = event->c;
+    
+    // Ako nema karaktera (npr. sistemska kontrolna prečica), preskoči
+    if (unicode_char == 0) {
+        break;
+    }
+
+    // Pozivamo tvoju ispravnu handle_keypress funkciju koja žvaće Unicode karaktere
+    extern void handle_keypress(sveska_t *sveska, const kbd_event_t *event);
+    handle_keypress(sveska, event);
+    
+    break;
         }
     }
 }
