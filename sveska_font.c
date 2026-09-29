@@ -71,15 +71,20 @@ sveska_font_t *sveska_font_load(sveska_t *sveska, const char *path, float target
     }
 
     // 4. Get font metrics & scaling
+    // 4. Get font metrics & scaling
     int ascent, descent, linegap;
     stbtt_GetFontVMetrics(&font->info, &ascent, &descent, &linegap);
     font->scale = stbtt_ScaleForPixelHeight(&font->info, target_pixel_height);
 
+    // POPRAVKA: Računamo visinu reda iz stvarnih vertikalnih metrika fonta (ascent - descent + linegap)
+    // što osigurava da visoke kvačice (Š, Ž, Č...) i duboki kraci (đ, ђ) imaju dovoljno prostora u RAM-u!
+    int total_font_height = (int)((ascent - descent + linegap) * font->scale);
+    font->line_height = total_font_height + 4; // Dodajemo 4px sigurnosnog paddinga za ceo red
+
+    // Deklaracija koordinatnih varijabli da sprečimo "undeclared" kompajlersku grešku
     int x0, y0, x1, y1;
     stbtt_GetCodepointBitmapBox(&font->info, 'X', font->scale, font->scale, &x0, &y0, &x1, &y1);
-    int char_height = (y1 - y0) + 4; // Add 4px padding
-    font->char_width = (x1 - x0) + 2;  // Add some padding
-    font->line_height = char_height;
+    font->char_width = (x1 - x0) + 2;  
 
     int space_advance, space_lsb;
     stbtt_GetCodepointHMetrics(&font->info, ' ', &space_advance, &space_lsb);
@@ -89,19 +94,10 @@ sveska_font_t *sveska_font_load(sveska_t *sveska, const char *path, float target
     }
 
     if (sveska) {
-        sveska->last_line_height = char_height;
-        printf("Initial line height set to %d pixels (from 'X' character)\n", char_height);
+        sveska->last_line_height = font->line_height; // Prosleđujemo ispravnu visinu celom UI sistemu
+        printf("Initial line height set to %d pixels (from font metrics)\n", font->line_height);
     }
 
-    stbtt_GetFontBoundingBox(&font->info,
-                            &font->bbox_x0, &font->bbox_y0,
-                            &font->bbox_x1, &font->bbox_y1);
-/*
-    printf("Loaded font '%s' (size %.1f):\n", path, target_pixel_height);
-    printf("  Bounding Box: (%d,%d) to (%d,%d)\n",
-           font->bbox_x0, font->bbox_y0, font->bbox_x1, font->bbox_y1);
-    printf("  Line height: %d pixels\n", font->line_height);
-*/
     // 5. Add font to cache if there is space
     if (sveska->font_cache_count < MAX_FONT_CACHE) {
         font_cache_entry_t *entry = &sveska->font_cache[sveska->font_cache_count++];
@@ -115,7 +111,7 @@ sveska_font_t *sveska_font_load(sveska_t *sveska, const char *path, float target
 
     // 6. Check for missing Serbian Latin chars (optional)
     int missing_chars = 0;
-    const int test_chars[] = {0xC5, 0xC4, 0xE5, 0xE4}; // ŠĐČĆšđčć
+    const int test_chars[] = {0x0160, 0x0161, 0x0452, 0x0111}; // ŠĐČĆšđčć
     for (int i = 0; i < 4; i++) {
         if (!stbtt_FindGlyphIndex(&font->info, test_chars[i])) {
             missing_chars++;
@@ -404,7 +400,6 @@ void update_cursor_position(sveska_t *sveska) {
     // Calculate current visual line (accounts for wrapped lines)
     int visual_line = 0;
     int x = sveska->margin_x;
-    int wrap_point = sveska->window_width - sveska->margin_x;
     int pos = 0;
     int prev_codepoint = 0;
 
@@ -439,23 +434,42 @@ void update_cursor_position(sveska_t *sveska) {
             pos++;
             continue;
         }
-// podrska za sliku 
-if (span->is_image) {
-    // Image takes up its full width and height
-    x += span->img_width + sveska->char_spacing;
-    
-    // Update Y position based on image height
-    if (span->img_height > sveska->char_cursor.height) {
-        sveska->char_cursor.height = span->img_height;
-    }
-    
-    pos++; // Treat image as one character position
-    continue;
-}
-//kraj podrske za sliku
+
+        // Podrska za sliku
+        if (span->is_image) {
+            x += span->img_width + sveska->char_spacing;
+            
+            if (span->img_height > sveska->char_cursor.height) {
+                sveska->char_cursor.height = span->img_height;
+            }
+            
+            pos++; 
+            continue; 
+        }
+
+        // Tekstualni UTF-8 karakteri i geometrija glifova
+        utf8_char_t ch = sveska->get_utf8_char(span->text, char_idx);
+        if (ch.length == 0) {
+            pos++;
+            continue;
+        }
+
+        // Indeksiranje niza bajtova ch.bytes[x]
+        int codepoint = 0;
+        if (ch.length == 1) {
+            codepoint = ch.bytes[0];
+        } else if (ch.length == 2) {
+            codepoint = ((ch.bytes[0] & 0x1F) << 6) | (ch.bytes[1] & 0x3F);
+        } else if (ch.length == 3) {
+            codepoint = ((ch.bytes[0] & 0x0F) << 12) | ((ch.bytes[1] & 0x3F) << 6) | (ch.bytes[2] & 0x3F);
+        } else if (ch.length == 4) {
+            codepoint = ((ch.bytes[0] & 0x07) << 18) | ((ch.bytes[1] & 0x3F) << 12) |
+                        ((ch.bytes[2] & 0x3F) << 6) | (ch.bytes[3] & 0x3F);
+        }
+
         sveska_font_t *font = span->font ? span->font : sveska->font;
         if (!font) {
-            pos++;
+            pos += ch.length;
             continue;
         }
 
@@ -463,26 +477,29 @@ if (span->is_image) {
             ? stbtt_ScaleForPixelHeight(&font->info, span->font_size)
             : font->scale;
 
-        int codepoint = (unsigned char)span->text[char_idx];
+        // Racunanje sirine preko Glyph funkcija
+        int glyph_index = stbtt_FindGlyphIndex(&font->info, codepoint);
         int advance, lsb, x0, y0, x1, y1;
-        stbtt_GetCodepointHMetrics(&font->info, codepoint, &advance, &lsb);
-        stbtt_GetCodepointBitmapBox(&font->info, codepoint, scale, scale, &x0, &y0, &x1, &y1);
+        stbtt_GetGlyphHMetrics(&font->info, glyph_index, &advance, &lsb);
+        stbtt_GetGlyphBitmapBox(&font->info, glyph_index, scale, scale, &x0, &y0, &x1, &y1);
 
         int char_width = (x1 - x0) + (span->bold ? 1 : 0) + sveska->char_spacing;
+        if (codepoint == ' ') {
+            char_width = font->space_width;
+        }
 
-        // Check if we need to wrap
-        if (x + char_width > wrap_point && x > sveska->margin_x) {
+        // Word wrap koriscenjem sveska elemenata
+        if (x + char_width > (sveska->window_width - sveska->margin_x) && x > sveska->margin_x) {
             visual_line++;
             x = sveska->margin_x;
             prev_codepoint = 0;
             
-            // Move down to next line
             if (visual_line < (int)sveska->line_count) {
                 last_y = sveska->line_y_positions[visual_line];
             } else {
                 last_y += sveska->line_heights[visual_line - 1];
             }
-            continue; // re-process this char on new line
+            continue; 
         }
 
         if (prev_codepoint) {
@@ -491,9 +508,12 @@ if (span->is_image) {
 
         x += (int)(advance * scale) + sveska->char_spacing;
         prev_codepoint = codepoint;
-        pos++;
+
+        // Pomeramo globalni pos za tacnu duzinu u bajtovima unesenog slova
+        pos += ch.length;
     }
 
+    // Postavljanje finalnih koordinata dobijenih iz petlje
     sveska->char_cursor.x = x;
     sveska->last_cursor_x = x;
     
@@ -511,6 +531,7 @@ if (span->is_image) {
         sveska->char_cursor.x = sveska->margin_x;
     }
 }
+
 
 
 
@@ -589,16 +610,15 @@ bool sveska_config_load(sveska_t *sveska, const char *path) {
         // Trim whitespace from key and value
         trim_whitespace(key);
         trim_whitespace(value);
-         printf("Trimmed Key: '%s', Trimmed Value: '%s'\n", key, value); 
+        printf("Trimmed Key: '%s', Trimmed Value: '%s'\n", key, value); 
+        
         // Apply config values to sveska_t
-
         if (str_cmp(key, "menu_bar_height") == 0) {
             sveska->menu_bar_height = atoi(value);
         } else if (str_cmp(key, "menu_bar_number") == 0) {
             sveska->menu_bar_number = atoi(value);
         } else if (str_cmp(key, "text_area_offset_y") == 0) {
             sveska->text_area_offset_y = atoi(value);
-
         } else if (str_cmp(key, "text_margin_x") == 0) {
             sveska->text_margin_x = atoi(value);
         } else if (str_cmp(key, "text_margin_y") == 0) {
@@ -611,27 +631,43 @@ bool sveska_config_load(sveska_t *sveska, const char *path) {
         } else if (str_cmp(key, "debug_enabled") == 0) {
             sveska->debug_enabled = atoi(value);  // 1 for enabled, 0 for disabled
             printf("Debug Enabled: %d\n", sveska->debug_enabled);  // Check value
+        } 
+        /* 
+         * KORISNIČKI INTERFEJS ZA SRBIN OS:
+         * Čitamo podrazumevani raspored direktno iz sveska.cfg konfiguracije.
+         * Koristimo tvoju funkciju str_cmp za bezbedno proveravanje stringova.
+         */
+        else if (str_cmp(key, "default_layout") == 0) {
+            if (str_cmp(value, "cyrillic") == 0) {
+                sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_CYRILLIC;
+            } else if (str_cmp(value, "latin") == 0) {
+                sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_LATIN;
+            } else {
+                sveska->current_layout = KEYBOARD_LAYOUT_US;
+            }
         }
     }
 
     fclose(file);
     printf("Loaded configuration 0 :\n");
-    // Calculate text_area_offset_y manually
-   // sveska->text_area_offset_y = sveska->menu_bar_height + 10;
- //   sveska->debug_enabled = 1; 
-  // Print out the loaded values for debugging
-  if (sveska->debug_enabled) {
-    printf("Loaded configuration 1:\n");
-    printf("Menu Bar Height: %d\n", sveska->menu_bar_height);
-    printf("Menu Bar Number: %d\n", sveska->menu_bar_number);
-    printf("Text Margin X: %d\n", sveska->text_margin_x);
-    printf("Text Margin Y: %d\n", sveska->text_margin_y);
-    printf("Char Spacing: %d\n", sveska->char_spacing);
-    printf("Font Size: %.2f\n", sveska->font_size);
-    printf("Text Area Offset Y: %d\n", sveska->text_area_offset_y);
-}
+
+    // Print out the loaded values for debugging
+    if (sveska->debug_enabled) {
+        printf("Loaded configuration 1:\n");
+        printf("Menu Bar Height: %d\n", sveska->menu_bar_height);
+        printf("Menu Bar Number: %d\n", sveska->menu_bar_number);
+        printf("Text Margin X: %d\n", sveska->text_margin_x);
+        printf("Text Margin Y: %d\n", sveska->text_margin_y);
+        printf("Char Spacing: %d\n", sveska->char_spacing);
+        printf("Font Size: %.2f\n", sveska->font_size);
+        printf("Text Area Offset Y: %d\n", sveska->text_area_offset_y);
+        
+        // Dodatni ispis da u konzoli odmah vidiš koji je layout povukao sa starta
+        printf("Default Layout Index: %d\n", sveska->current_layout);
+    }
     return true;
 }
+
 
 
 /** @}
