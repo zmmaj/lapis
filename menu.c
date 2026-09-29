@@ -29,21 +29,9 @@
 #include <stdlib.h>
 #include <str.h>
 #include "sveska.h"
+#include "menu.h"
 
 
-void update_font_size(sveska_t *sveska, float new_font_size);
-
-typedef struct {
-    sveska_t *sveska;
-    size_t font_index;
-} font_callback_data_t;
-
-
-// Callback functions for menu entries
-static void menu_action_new(ui_menu_entry_t *entry, void *arg);
-static void menu_action_open(ui_menu_entry_t *entry, void *arg);
-static void menu_action_save(ui_menu_entry_t *entry, void *arg);
-static void menu_action_save_as(ui_menu_entry_t *entry, void *arg);
 static void menu_action_exit(ui_menu_entry_t *entry, void *arg);
 static void menu_action_undo(ui_menu_entry_t *entry, void *arg);
 static void menu_action_redo(ui_menu_entry_t *entry, void *arg);
@@ -53,10 +41,6 @@ static void menu_action_underline(ui_menu_entry_t *entry, void *arg);
 static void menu_action_insert_image(ui_menu_entry_t *entry, void *arg);
 
 static void menu_action_font_selected(ui_menu_entry_t *entry, void *arg);
-
-
-
-
 static void menu_action_size_1(ui_menu_entry_t *entry, void *arg);
 static void menu_action_size_2(ui_menu_entry_t *entry, void *arg);
 static void menu_action_size_3(ui_menu_entry_t *entry, void *arg);
@@ -90,7 +74,15 @@ static void menu_action_text_color_brown(ui_menu_entry_t *entry, void *arg);
 
 static void menu_action_help(ui_menu_entry_t *entry, void *arg);
 
-static void file_open(void);
+
+void update_font_size(sveska_t *sveska, float new_font_size);
+
+typedef struct {
+    sveska_t *sveska;
+    size_t font_index;
+} font_callback_data_t;
+
+
 
 // Add these at the top with other function prototypes
 static void open_dialog_bok(ui_file_dialog_t *, void *, const char *);
@@ -103,6 +95,99 @@ static ui_file_dialog_cb_t open_dialog_cb = {
     .bcancel = open_dialog_bcancel,
     .close = open_dialog_close
 };
+
+// Prototip funkcije da je struktura vidi
+static void save_dialog_bok(ui_file_dialog_t *, void *, const char *);
+static void save_dialog_bcancel(ui_file_dialog_t *, void *);
+static void save_dialog_close(ui_file_dialog_t *, void *);
+
+// HelenOS Callback struktura za Save As dijalog
+static ui_file_dialog_cb_t save_dialog_cb = {
+	.bok = save_dialog_bok,
+	.bcancel = save_dialog_bcancel,
+	.close = save_dialog_close
+};
+
+/** Pokreće Save As dijalog iz menija. */
+void menu_action_save_as(ui_menu_entry_t *entry, void *arg) 
+{
+	sveska_t *sveska = (sveska_t *)arg;
+	ui_file_dialog_params_t fdparams;
+	ui_file_dialog_t *dialog;
+	errno_t rc;
+
+	(void)entry;
+	if (!sveska) return;
+
+	ui_file_dialog_params_init(&fdparams);
+	fdparams.caption = "Save As";
+	// Kao inicijalno ime nudimo trenutnu putanju fajla ako postoji
+	fdparams.ifname = (sveska->current_file[0] != '\0') ? sveska->current_file : "";
+
+	rc = ui_file_dialog_create(sveska->ui, &fdparams, &dialog);
+	if (rc != EOK) {
+		printf("Greska pri kreiranju Save As dijaloga.\n");
+		return;
+	}
+
+	ui_file_dialog_set_cb(dialog, &save_dialog_cb, sveska);
+}
+
+
+/** Save As dijalog OK dugme pritisnuto. */
+static void save_dialog_bok(ui_file_dialog_t *dialog, void *arg, const char *fname)
+{
+	sveska_t *sveska = (sveska_t *)arg;
+	char *cname;
+
+	if (fname == NULL || *fname == '\0') {
+		printf("Greska: Prazna putanja za cuvanje.\n");
+		ui_file_dialog_destroy(dialog);
+		return;
+	}
+
+	// SPAS ZA MEOMORIJU: Kopiramo string pre nego što uništimo dijalog!
+	cname = str_dup(fname);
+	if (cname == NULL) {
+		printf("Van memorije tokom Sacuvaj kao.\n");
+		ui_file_dialog_destroy(dialog);
+		return;
+	}
+
+	// Uništavamo prozor dijaloga i oslobađamo interfejs
+	ui_file_dialog_destroy(dialog);
+
+	// Čistimo skrivene prelome redova sa kraja nove putanje fajla
+	size_t len = str_length(cname);
+	while (len > 0 && (cname[len - 1] == '\n' || cname[len - 1] == '\r' || cname[len - 1] == ' ')) {
+		cname[len - 1] = '\0';
+		len--;
+	}
+
+	// Pozivamo tvoju ispravljenu save_document funkciju sa podrškom za slike!
+	bool uspeh = save_document(sveska, cname);
+	if (uspeh) {
+		// Ažuriramo trenutnu putanju dokumenta u fiksnom nizu sveska strukture
+		str_ncpy(sveska->current_file, MAX_PATH_LENGTH, cname, str_size(cname));
+		sveska->document_modified = false;
+	}
+
+	free(cname);
+}
+
+/** Pomoćni prazni callback-ovi za cancel i close da kompajler ne buni. */
+static void save_dialog_bcancel(ui_file_dialog_t *dialog, void *arg)
+{
+	(void)arg;
+	ui_file_dialog_destroy(dialog);
+}
+
+static void save_dialog_close(ui_file_dialog_t *dialog, void *arg)
+{
+	(void)arg;
+	ui_file_dialog_destroy(dialog);
+}
+
 
 // Function to create menu bar
 errno_t create_menu_bar(sveska_t *sveska) {
@@ -553,7 +638,7 @@ errno_t create_menu_bar(sveska_t *sveska) {
         printf("Greska pri kreiranju Help menu.\n");
         return rc;
     }
-  printf("Pre Help menu entry.\n");
+ // printf("Pre Help menu entry.\n");
     rc = ui_menu_entry_create(help_menu, "Pomoc", "F1", &help_entry);
     if (rc != EOK) {
        printf("Greska pri kreiranju Help menu entry.\n");
@@ -573,18 +658,78 @@ errno_t create_menu_bar(sveska_t *sveska) {
 }
 
 // Action callbacks for menu entries
-void menu_action_new(ui_menu_entry_t *entry, void *arg) {
-    printf("NEW action triggered\n");
+void menu_action_new(ui_menu_entry_t *entry, void *arg)
+{
+	sveska_t *sveska = (sveska_t *)arg;
+	(void)entry;
 
+	if (!sveska) return;
+
+	printf("Pokrecem kreiranje novog dokumenta...\n");
+
+	// 1. Oslobađamo memoriju svih postojećih spanova da sprečimo curenje RAM-a
+	if (sveska->document.spans) {
+		for (size_t i = 0; i < sveska->document.count; i++) {
+			text_span_t *span = &sveska->document.spans[i];
+			if (span->text) {
+				free(span->text);
+				span->text = NULL;
+			}
+			if (span->font) {
+				sveska_font_unref(sveska, span->font);
+				span->font = NULL;
+			}
+		}
+		// Resetujemo broj spanova na nulu
+		sveska->document.count = 0;
+	}
+
+	// 2. Kreiramo jedan početni, prazan span kako bi korisnik mogao odmah da kuca
+	if (sveska->document.capacity > 0 && sveska->document.spans != NULL) {
+		text_span_t *first_span = &sveska->document.spans[0];
+		memset(first_span, 0, sizeof(text_span_t));
+		
+		// Alociramo prazan string za prvi span
+		first_span->text = malloc(1);
+		if (first_span->text) {
+			first_span->text[0] = '\0';
+		}
+		first_span->length = 0;
+		first_span->capacity = 1;
+		
+		// Vezujemo podrazumevani sistemski font
+		first_span->font = sveska_font_ref(sveska->font);
+		first_span->font_size = sveska->font_size;
+		str_ncpy(first_span->font_path, MAX_FONT_PATH_LEN, sveska->current_font_path, MAX_FONT_PATH_LEN - 1);
+		
+		sveska->document.count = 1;
+	}
+
+	// 3. Resetujemo status fajla (pošto novi dokument još uvek nije sačuvan na disk)
+	sveska->current_file[0] = '\0'; // Čistimo fiksnu matricu niza karaktera
+	sveska->document_modified = false;
+
+	// 4. Resetujemo kursor i selekciju na početak
+	sveska->cursor_index = 0;
+	sveska->current_span = 0;
+	sveska->selection.start_pos = -1;
+	sveska->selection.end_pos = -1;
+
+	// 5. Potpuni ponovni render i osvežavanje ekrana za SrBin oS
+	rebuild_display_text(sveska);
+	update_cursor_position(sveska);
+	sveska_text_render(sveska);
+
+	printf("Nov dokument je uspesno kreiran i spreman za kucanje.\n");
 }
 
 // Action callbacks for menu entries
 void menu_action_open(ui_menu_entry_t *entry, void *arg) {
     // For now, hardcode the file path
 
-    printf("krece otvaranje dijaloga.\n");
+   // printf("krece otvaranje dijaloga.\n");
     file_open();
-    printf("zavrsio otvaranje dijaloga.\n");
+   // printf("zavrsio otvaranje dijaloga.\n");
 
         return;
 }
@@ -600,10 +745,6 @@ void menu_action_save(ui_menu_entry_t *entry, void *arg) {
 }
 
 
-void menu_action_save_as(ui_menu_entry_t *entry, void *arg) {
-        // For now, just save with a different name
-        save_document(sveska, "novi_text_2.zmj");
-}
 
 void menu_action_exit(ui_menu_entry_t *entry, void *arg) {
     printf("Exit action triggered\n");
@@ -722,19 +863,6 @@ static void menu_action_font_selected(ui_menu_entry_t *entry, void *arg) {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-/*          END FONT ***************************************/
 
 // Size callbacks for menu entries
 void menu_action_size_1(ui_menu_entry_t *entry, void *arg) {
@@ -965,7 +1093,7 @@ void update_font_size(sveska_t *sveska, float new_font_size) {
 
 
 /** Open Open File dialog. */
-static void file_open(void)
+ void file_open(void)
 {
 	// Since current_file is an array, check if the first character is not null
  //   sveska_t *file_name = (sveska_t *) arg;
@@ -1068,6 +1196,9 @@ static void open_dialog_bcancel(ui_file_dialog_t *dialog, void *arg)
 	(void)sveska;
      ui_file_dialog_destroy(dialog);
  }
+
+
+
 
 /** @}
  */
