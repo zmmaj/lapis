@@ -7,6 +7,7 @@
 
 #include "sveska.h"
 #include "sveska_keymap.h"
+#include "menu.h"
 #include <clipboard.h>
 #include <stdio.h>
 #include <mem.h>
@@ -338,17 +339,29 @@ void handle_special_combo(sveska_t *sveska, const kbd_event_t *event) {
                 handle_paste(sveska);
                 break;
                 
-            case KC_S:
+                case KC_S:
                 printf("Ctrl+S pressed - Save command\n");
+                // Ako fajl već ima putanju, prepisujemo ga bez dijaloga, u suprotnom pokrećemo Save As
+                if (sveska->current_file[0] != '\0') {
+                    save_document(sveska, sveska->current_file);
+                } else {
+                    // Pozivamo Save As akciju iz menija, prosleđujući NULL za entry
+                    menu_action_save_as(NULL, sveska);
+                }
                 break;
                 
             case KC_O:
                 printf("Ctrl+O pressed - Open command\n");
+                // Direktno podižemo dijalog za otvaranje fajla koji smo sredili!
+                file_open(); 
                 break;
                 
             case KC_N:
                 printf("Ctrl+N pressed - New document\n");
+                // Pozivamo akciju za novi dokument iz menija, prosleđujući NULL za entry
+                menu_action_new(NULL, sveska);
                 break;
+
                 
             case KC_B:
                 sveska_toggle_bold(sveska);
