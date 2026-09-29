@@ -217,40 +217,7 @@ bool is_serbian_key(int key) {
             key == KC_Z || key == KC_L || key == KC_N);
 }
 
-/*
-void save_keyboard_layout(keyboard_layout_t layout) {
-    // Save to config file or registry
-    const char *layout_str;
-    switch (layout) {
-        case KEYBOARD_LAYOUT_SERBIAN_LATIN: layout_str = "sr_latin"; break;
-        case KEYBOARD_LAYOUT_SERBIAN_CYRILLIC: layout_str = "sr_cyrillic"; break;
-        default: layout_str = "us"; break;
-    }
-    config_set_string("keyboard_layout", layout_str);
-}
 
-void load_keyboard_layout() {
-    const char *layout = config_get_string("keyboard_layout", "us");
-    if (strcmp(layout, "sr_latin") == 0) {
-        sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_LATIN;
-    } else if (strcmp(layout, "sr_cyrillic") == 0) {
-        sveska->current_layout = KEYBOARD_LAYOUT_SERBIAN_CYRILLIC;
-    } else {
-        sveska->current_layout = KEYBOARD_LAYOUT_US;
-    }
-}
-
-void update_layout_indicator() {
-    const char *layout_name;
-    switch (sveska->current_layout) {
-        case KEYBOARD_LAYOUT_SERBIAN_LATIN: layout_name = "SR Latin"; break;
-        case KEYBOARD_LAYOUT_SERBIAN_CYRILLIC: layout_name = "SR Cyrillic"; break;
-        default: layout_name = "EN"; break;
-    }
-    // Update your status bar or other UI element
-    status_bar_set_text("Layout: %s", layout_name);
-}
-    */
 
 
 
